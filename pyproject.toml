@@ -1,0 +1,28 @@
+[project]
+name = "simple-task-manager"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.43.108",
+    "dj-database-url>=3.1.2",
+    "django>=6.1.1",
+    "djangorestframework>=3.18.1",
+    "djangorestframework-simplejwt>=5.5.1",
+    "gunicorn>=26.2.0",
+    "psycopg[binary]>=3.3.6",
+    "python-dotenv>=1.2.4",
+    "whitenoise>=6.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "fastapi>=0.142.2",
+    "pytest-django>=4.14.0",
+    "uvicorn>=0.54.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "jobs_tracker.settings"
+python_files = ["tests.py"]
