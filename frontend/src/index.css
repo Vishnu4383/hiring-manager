@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-paper: #f5f2fb;
+  --color-card: #fffdfb;
+  --color-ink: #2d2543;
+  --color-mute: #766d90;
+  --color-line: #e4ddf2;
+  --color-brand: #6c4bc4;
+  --color-brand-deep: #4f349a;
+  --color-brand-soft: #ebe5f9;
+  --color-sand: #fff0d2;
+  --color-sand-ink: #8a5a00;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
