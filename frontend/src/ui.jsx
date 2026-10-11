@@ -11,6 +11,22 @@ export const STAGES = [
   ['rejected', 'Rejected'],
 ]
 
+export const ROUNDS = [
+  ['resume', 'Resume rejection'],
+  ['oa', 'OA'],
+  ['theory', 'Technical (theory)'],
+  ['project', 'Technical (project review)'],
+  ['hr', 'HR'],
+  ['gd', 'Group discussion'],
+  ['hackathon', 'Hackathon'],
+]
+
+export const RESULTS = {
+  unknown: ['Unknown', 'bg-rose text-rose-ink'],
+  partial: ['Partly', 'bg-sand text-sand-ink'],
+  solved: ['Solved', 'bg-mint text-mint-ink'],
+}
+
 export const input =
   'w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft'
 export const btn =
@@ -24,7 +40,7 @@ export function ago(iso) {
   return days === 1 ? 'yesterday' : `${days}d ago`
 }
 
-export function Modal({ title, onClose, children }) {
+export function Modal({ title, onClose, wide, children }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -36,7 +52,7 @@ export function Modal({ title, onClose, children }) {
       className="fixed inset-0 z-20 flex items-center justify-center bg-ink/30 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={`${card} max-h-[90vh] w-full max-w-md overflow-y-auto p-6 shadow-xl`}>
+      <div className={`${card} max-h-[90vh] w-full ${wide ? 'max-w-2xl' : 'max-w-md'} overflow-y-auto p-6 shadow-xl`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">{title}</h2>
           <button className="text-mute hover:text-ink" onClick={onClose} aria-label="Close">
@@ -56,4 +72,8 @@ export function Label({ text, children }) {
       <div className="mt-1 font-normal text-ink">{children}</div>
     </label>
   )
+}
+
+export function Chip({ style, children }) {
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{children}</span>
 }

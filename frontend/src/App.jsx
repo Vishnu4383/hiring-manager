@@ -5,13 +5,17 @@ import Login from './Login'
 import Board from './Board'
 import Calendar from './Calendar'
 import Stats from './Stats'
+import Debrief from './Debrief'
 import Vault from './Vault'
+import Profile from './Profile'
 
 const TABS = [
   ['board', 'Board'],
   ['calendar', 'Calendar'],
   ['stats', 'Insights'],
+  ['debrief', 'Debrief'],
   ['vault', 'Vault'],
+  ['profile', 'Profile'],
 ]
 
 function greeting() {
@@ -86,7 +90,9 @@ export default function App() {
         {tab === 'board' && <Board />}
         {tab === 'calendar' && <Calendar deadlines={deadlines} setDeadlines={setDeadlines} />}
         {tab === 'stats' && <Stats />}
+        {tab === 'debrief' && <Debrief />}
         {tab === 'vault' && <Vault />}
+        {tab === 'profile' && <Profile />}
       </main>
     </div>
   )
