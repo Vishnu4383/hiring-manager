@@ -1,14 +1,16 @@
 import uuid
 from functools import lru_cache
+from urllib.parse import quote
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.db import connection
 from django.db.models import Count
 from django.db.models.functions import TruncWeek
-from rest_framework import serializers, viewsets
+from rest_framework import generics, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny
@@ -19,11 +21,14 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Application, Deadline, Document, Status, StatusEvent
+from .models import Application, Debrief, Deadline, Document, Profile, Project, Question, Status, StatusEvent
 from .serializers import (
     ApplicationSerializer,
     DeadlineSerializer,
+    DebriefSerializer,
     DocumentSerializer,
+    ProfileSerializer,
+    ProjectSerializer,
     RegisterSerializer,
 )
 
@@ -115,6 +120,15 @@ class Logout(AuthView):
         return response
 
 
+class Health(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        with connection.cursor() as cur:
+            cur.execute("SELECT 1")
+        return Response({"ok": True})
+
+
 class Me(APIView):
     def get(self, request):
         return Response({"email": request.user.username})
@@ -173,12 +187,72 @@ class DocumentViewSet(Mine):
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         doc = self.get_object()
+        ext = doc.key.rsplit(".", 1)[-1]
+        name = doc.name if doc.name.lower().endswith("." + ext) else f"{doc.name}.{ext}"
         url = r2().generate_presigned_url(
             "get_object",
-            Params={"Bucket": settings.R2_BUCKET, "Key": doc.key},
+            Params={
+                "Bucket": settings.R2_BUCKET,
+                "Key": doc.key,
+                "ResponseContentDisposition": f"inline; filename*=UTF-8''{quote(name, safe='')}",
+            },
             ExpiresIn=300,
         )
         return Response({"url": url})
+
+
+class DebriefViewSet(Mine):
+    queryset = Debrief.objects.prefetch_related("questions").order_by("-date", "-id")
+    serializer_class = DebriefSerializer
+
+
+class ProjectViewSet(Mine):
+    queryset = Project.objects.order_by("id")
+    serializer_class = ProjectSerializer
+
+
+class ProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+
+    def get_object(self):
+        profile, _ = Profile.objects.get_or_create(
+            user=self.request.user, defaults={"email": self.request.user.username}
+        )
+        return profile
+
+
+RANK = {"unknown": 0, "partial": 1, "solved": 2}
+
+
+class Topics(APIView):
+    def get(self, request):
+        rows = (
+            Question.objects.filter(debrief__user=request.user)
+            .select_related("debrief")
+            .order_by("debrief__date", "debrief_id", "id")
+        )
+        topics = {}
+        for q in rows:
+            t = topics.setdefault(
+                q.topic.lower(),
+                {"topic": q.topic, "counts": {r: 0 for r in RANK}, "questions": []},
+            )
+            t["counts"][q.result] += 1
+            t["latest"] = q.result
+            t["questions"].append(
+                {
+                    "text": q.text,
+                    "result": q.result,
+                    "company": q.debrief.company,
+                    "round_type": q.debrief.round_type,
+                    "date": q.debrief.date,
+                }
+            )
+        ranked = sorted(
+            topics.values(),
+            key=lambda t: (RANK[t["latest"]], -t["counts"]["unknown"], t["topic"].lower()),
+        )
+        return Response(ranked)
 
 
 class Stats(APIView):

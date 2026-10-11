@@ -108,3 +108,92 @@ def test_stats():
     assert data["reached"]["interview"] == 1
     assert data["avg_days_to_response"] is not None
     assert sum(w["n"] for w in data["per_week"]) == 2
+
+
+def test_health_is_public():
+    r = APIClient().get("/api/health/")
+    assert r.status_code == 200 and r.data == {"ok": True}
+
+
+@patch("api.views.r2")
+def test_download_uses_chosen_name(r2):
+    r2.return_value.generate_presigned_url.return_value = "https://signed"
+    r2.return_value.head_object.return_value = {"ContentLength": 900}
+    c = signup()
+    doc = c.post("/api/documents/", {"name": "cv.pdf", "kind": "resume", "key": "u1/abc.pdf"}).data
+    c.patch(f"/api/documents/{doc['id']}/", {"name": "Backend CV"})
+    c.get(f"/api/documents/{doc['id']}/download/")
+    params = r2.return_value.generate_presigned_url.call_args.kwargs["Params"]
+    assert params["ResponseContentDisposition"].endswith("Backend%20CV.pdf")
+
+
+def round_body(company="Acme", date="2026-09-01", questions=(), **extra):
+    return {
+        "company": company,
+        "round_type": "theory",
+        "date": date,
+        "questions": list(questions),
+        **extra,
+    }
+
+
+def q(text, topic, result):
+    return {"text": text, "topic": topic, "result": result}
+
+
+def test_debrief_needs_company_or_application():
+    c = signup()
+    assert c.post("/api/debriefs/", round_body(company=""), format="json").status_code == 400
+    app = add_app(c)
+    r = c.post("/api/debriefs/", round_body(company="", application=app["id"]), format="json")
+    assert r.status_code == 201 and r.data["company"] == "Acme"
+
+
+def test_topics_are_reused_and_ranked_by_latest_result():
+    c = signup()
+    c.post("/api/debriefs/", round_body(date="2026-08-01", questions=[
+        q("BFS on a grid", "Graphs", "unknown"),
+        q("Join types", "SQL", "unknown"),
+        q("Index basics", "sql ", "partial"),
+    ]), format="json")
+    c.post("/api/debriefs/", round_body(date="2026-09-01", questions=[
+        q("Dijkstra", "graphs", "solved"),
+    ]), format="json")
+
+    topics = c.get("/api/topics/").data
+    assert [t["topic"] for t in topics] == ["SQL", "Graphs"]
+    assert topics[0]["latest"] == "partial"
+    assert topics[1]["latest"] == "solved"
+    assert topics[1]["counts"] == {"unknown": 1, "partial": 0, "solved": 1}
+
+
+def test_debrief_update_replaces_questions():
+    c = signup()
+    made = c.post("/api/debriefs/", round_body(questions=[q("a", "DP", "unknown")]), format="json").data
+    c.patch(f"/api/debriefs/{made['id']}/", {"questions": [q("b", "OS", "solved")]}, format="json")
+    assert [t["topic"] for t in c.get("/api/topics/").data] == ["OS"]
+    c.patch(f"/api/debriefs/{made['id']}/", {"outcome": "cleared"}, format="json")
+    assert len(c.get(f"/api/debriefs/{made['id']}/").data["questions"]) == 1
+
+
+def test_debriefs_and_topics_are_private():
+    a, b = signup("a@x.com"), signup("b@x.com")
+    app = add_app(a)
+    made = a.post("/api/debriefs/", round_body(questions=[q("x", "Graphs", "unknown")]), format="json").data
+    assert b.get("/api/debriefs/").data == []
+    assert b.get("/api/topics/").data == []
+    assert b.patch(f"/api/debriefs/{made['id']}/", {"outcome": "cleared"}, format="json").status_code == 404
+    assert b.post("/api/debriefs/", round_body(application=app["id"]), format="json").status_code == 400
+
+
+def test_profile_and_projects():
+    a, b = signup("a@x.com"), signup("b@x.com")
+    assert a.get("/api/profile/").data["email"] == "a@x.com"
+    assert a.patch("/api/profile/", {"gpa": "11"}, format="json").status_code == 400
+    r = a.patch("/api/profile/", {"gpa": "8.7", "skills": ["Python", "Django"]}, format="json")
+    assert r.status_code == 200 and r.data["skills"] == ["Python", "Django"]
+    assert b.get("/api/profile/").data["gpa"] is None
+
+    proj = a.post("/api/projects/", {"title": "Tranquil"}).data
+    assert b.get("/api/projects/").data == []
+    assert b.delete(f"/api/projects/{proj['id']}/").status_code == 404
